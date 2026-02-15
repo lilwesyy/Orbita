@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server";
 import sharp from "sharp";
 import { prisma } from "@/lib/prisma";
-import { writeFile, unlink, mkdir } from "fs/promises";
-import { join } from "path";
-import { existsSync } from "fs";
 import type {
   BrandProfile,
   LogoVariant,
@@ -12,7 +9,6 @@ import type {
 
 const ALLOWED_TYPES = ["image/png", "image/jpeg", "image/webp"];
 const MAX_SIZE = 5 * 1024 * 1024; // 5MB
-const UPLOAD_DIR = join(process.cwd(), "public/uploads/projects");
 
 type UploadableVariant = "square" | "horizontal";
 
@@ -28,18 +24,7 @@ interface RouteParams {
   params: Promise<{ id: string }>;
 }
 
-async function ensureUploadDir() {
-  if (!existsSync(UPLOAD_DIR)) {
-    await mkdir(UPLOAD_DIR, { recursive: true });
-  }
-}
-
-async function generateFavicons(
-  buffer: Buffer,
-  projectId: string
-): Promise<FaviconSet> {
-  await ensureUploadDir();
-
+async function generateFavicons(buffer: Buffer): Promise<FaviconSet> {
   const sizes = [
     { size: 16, key: "favicon16" as const },
     { size: 32, key: "favicon32" as const },
@@ -49,27 +34,14 @@ async function generateFavicons(
   const favicons: Partial<FaviconSet> = {};
 
   for (const { size, key } of sizes) {
-    const filename = `${projectId}-favicon-${size}.png`;
-    const filepath = join(UPLOAD_DIR, filename);
     const resized = await sharp(buffer)
       .resize(size, size, { fit: "cover" })
       .png()
       .toBuffer();
-    await writeFile(filepath, resized);
-    favicons[key] = `/uploads/projects/${filename}`;
+    favicons[key] = `data:image/png;base64,${resized.toString("base64")}`;
   }
 
   return favicons as FaviconSet;
-}
-
-async function deleteFavicons(projectId: string) {
-  const sizes = [16, 32, 180];
-  for (const size of sizes) {
-    const filepath = join(UPLOAD_DIR, `${projectId}-favicon-${size}.png`);
-    if (existsSync(filepath)) {
-      await unlink(filepath);
-    }
-  }
 }
 
 export async function POST(request: Request, { params }: RouteParams) {
@@ -109,8 +81,6 @@ export async function POST(request: Request, { params }: RouteParams) {
     );
   }
 
-  await ensureUploadDir();
-
   const bytes = await file.arrayBuffer();
   const inputBuffer = Buffer.from(bytes);
   const config = VARIANT_CONFIG[variant];
@@ -122,14 +92,9 @@ export async function POST(request: Request, { params }: RouteParams) {
     .toBuffer();
 
   const metadata = await sharp(resized).metadata();
-  const timestamp = Date.now();
-  const filename = `${id}-${variant}-${timestamp}.webp`;
-  const filepath = join(UPLOAD_DIR, filename);
-  await writeFile(filepath, resized);
+  const logoDataUrl = `data:image/webp;base64,${resized.toString("base64")}`;
 
-  const logoUrl = `/uploads/projects/${filename}`;
-
-  // Parse existing brand profile (may be a JSON string or object from DB)
+  // Parse existing brand profile
   const rawProfile = project.brandProfile;
   const brandProfile: BrandProfile =
     typeof rawProfile === "string"
@@ -138,31 +103,16 @@ export async function POST(request: Request, { params }: RouteParams) {
         ? (rawProfile as unknown as BrandProfile)
         : ({} as BrandProfile);
 
-  // Remove old file for this variant
-  const existingLogos: LogoVariant[] = brandProfile.logos ?? [];
-  const oldLogo = existingLogos.find((l) => l.variant === variant);
-  if (oldLogo) {
-    const oldPath = join(process.cwd(), "public", oldLogo.url);
-    if (existsSync(oldPath)) {
-      await unlink(oldPath);
-    }
-  } else if (variant === "square" && project.logoUrl) {
-    // Clean up legacy logoUrl file if no square entry in logos array yet
-    const oldPath = join(process.cwd(), "public", project.logoUrl);
-    if (existsSync(oldPath)) {
-      await unlink(oldPath);
-    }
-  }
-
   // Build new logo entry
   const newLogo: LogoVariant = {
     variant,
-    url: logoUrl,
+    url: logoDataUrl,
     width: metadata.width ?? config.width,
     height: metadata.height ?? (config.height ?? 0),
   };
 
   // Replace or add variant
+  const existingLogos: LogoVariant[] = brandProfile.logos ?? [];
   const updatedLogos = [
     ...existingLogos.filter((l) => l.variant !== variant),
     newLogo,
@@ -171,7 +121,7 @@ export async function POST(request: Request, { params }: RouteParams) {
   // Generate favicons when square is uploaded
   let favicons = brandProfile.favicons;
   if (variant === "square") {
-    favicons = await generateFavicons(inputBuffer, id);
+    favicons = await generateFavicons(inputBuffer);
   }
 
   const updatedProfile = {
@@ -185,7 +135,7 @@ export async function POST(request: Request, { params }: RouteParams) {
     brandProfile: JSON.stringify(updatedProfile),
   };
   if (variant === "square") {
-    updateData.logoUrl = logoUrl;
+    updateData.logoUrl = logoDataUrl;
   }
 
   await prisma.project.update({
@@ -225,22 +175,12 @@ export async function DELETE(request: Request, { params }: RouteParams) {
         : null;
 
   const existingLogos: LogoVariant[] = brandProfile?.logos ?? [];
-  const oldLogo = existingLogos.find((l) => l.variant === variant);
-
-  if (oldLogo) {
-    const oldPath = join(process.cwd(), "public", oldLogo.url);
-    if (existsSync(oldPath)) {
-      await unlink(oldPath);
-    }
-  }
-
   const updatedLogos = existingLogos.filter((l) => l.variant !== variant);
 
   // If deleting square, also remove favicons
   let favicons = brandProfile?.favicons;
   const updateData: Record<string, unknown> = {};
   if (variant === "square") {
-    await deleteFavicons(id);
     favicons = undefined;
     updateData.logoUrl = null;
   }

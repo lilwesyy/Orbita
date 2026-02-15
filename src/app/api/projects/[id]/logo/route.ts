@@ -1,13 +1,9 @@
 import { NextResponse } from "next/server";
 import sharp from "sharp";
 import { prisma } from "@/lib/prisma";
-import { writeFile, unlink, mkdir } from "fs/promises";
-import { join } from "path";
-import { existsSync } from "fs";
 
 const ALLOWED_TYPES = ["image/png", "image/jpeg", "image/webp"];
 const MAX_SIZE = 2 * 1024 * 1024; // 2MB
-const UPLOAD_DIR = join(process.cwd(), "public/uploads/projects");
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -42,29 +38,14 @@ export async function POST(request: Request, { params }: RouteParams) {
     );
   }
 
-  // Remove old logo if exists
-  if (project.logoUrl) {
-    const oldPath = join(process.cwd(), "public", project.logoUrl);
-    if (existsSync(oldPath)) {
-      await unlink(oldPath);
-    }
-  }
-
-  const filename = `${id}-${Date.now()}.webp`;
-  const filepath = join(UPLOAD_DIR, filename);
-
-  if (!existsSync(UPLOAD_DIR)) {
-    await mkdir(UPLOAD_DIR, { recursive: true });
-  }
-
   const bytes = await file.arrayBuffer();
   const resized = await sharp(Buffer.from(bytes))
     .resize(128, 128, { fit: "cover" })
     .webp({ quality: 85 })
     .toBuffer();
-  await writeFile(filepath, resized);
 
-  const logoUrl = `/uploads/projects/${filename}`;
+  const logoUrl = `data:image/webp;base64,${resized.toString("base64")}`;
+
   await prisma.project.update({
     where: { id },
     data: { logoUrl },
@@ -82,11 +63,6 @@ export async function DELETE(_request: Request, { params }: RouteParams) {
   }
 
   if (project.logoUrl) {
-    const oldPath = join(process.cwd(), "public", project.logoUrl);
-    if (existsSync(oldPath)) {
-      await unlink(oldPath);
-    }
-
     await prisma.project.update({
       where: { id },
       data: { logoUrl: null },
