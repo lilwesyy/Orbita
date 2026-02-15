@@ -1,7 +1,8 @@
-import { TrendingUp, TrendingDown } from "lucide-react";
+import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription, CardAction, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/utils";
+import type { TrendData } from "@/lib/dashboard";
 
 interface StatsCardsProps {
   totalRevenue: number;
@@ -10,6 +11,28 @@ interface StatsCardsProps {
   totalClients: number;
   draftInvoices: number;
   overdueInvoices: number;
+  trends: TrendData;
+}
+
+function TrendBadge({ value }: { value: number | null }) {
+  if (value === null) {
+    return (
+      <Badge variant="outline">
+        <Minus className="size-3" />
+        —
+      </Badge>
+    );
+  }
+
+  const isPositive = value >= 0;
+  const formatted = `${isPositive ? "+" : ""}${value}%`;
+
+  return (
+    <Badge variant="outline">
+      {isPositive ? <TrendingUp className="size-3" /> : <TrendingDown className="size-3" />}
+      {formatted}
+    </Badge>
+  );
 }
 
 export function StatsCards({
@@ -19,6 +42,7 @@ export function StatsCards({
   totalClients,
   draftInvoices,
   overdueInvoices,
+  trends,
 }: StatsCardsProps) {
   return (
     <div className="*:data-[slot=card]:shadow-xs grid grid-cols-1 gap-4 px-4 lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
@@ -29,15 +53,12 @@ export function StatsCards({
             {formatCurrency(totalRevenue)}
           </CardTitle>
           <CardAction>
-            <Badge variant="outline">
-              <TrendingUp className="size-3" />
-              +12.5%
-            </Badge>
+            <TrendBadge value={trends.revenueTrend} />
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            Total paid invoices <TrendingUp className="size-4" />
+            Total paid invoices
           </div>
           <div className="text-muted-foreground">
             {draftInvoices > 0 ? `${draftInvoices} invoices still in draft` : "No draft invoices"}
@@ -53,17 +74,17 @@ export function StatsCards({
           </CardTitle>
           <CardAction>
             <Badge variant="outline">
-              <TrendingUp className="size-3" />
-              Active
+              {activeProjects > 0 ? <TrendingUp className="size-3" /> : <Minus className="size-3" />}
+              {activeProjects > 0 ? "Active" : "—"}
             </Badge>
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            In Progress and Review projects <TrendingUp className="size-4" />
+            In Progress and Review
           </div>
           <div className="text-muted-foreground">
-            Includes In Progress and Review status
+            Excludes proposals and completed
           </div>
         </CardFooter>
       </Card>
@@ -75,15 +96,12 @@ export function StatsCards({
             {hoursThisMonth.toFixed(1)}h
           </CardTitle>
           <CardAction>
-            <Badge variant="outline">
-              {hoursThisMonth > 0 ? <TrendingUp className="size-3" /> : <TrendingDown className="size-3" />}
-              {hoursThisMonth > 0 ? "Active" : "—"}
-            </Badge>
+            <TrendBadge value={trends.hoursTrend} />
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            Time logged this month
+            vs {trends.hoursLastMonth.toFixed(1)}h last month
           </div>
           <div className="text-muted-foreground">
             Completed entries only
@@ -99,8 +117,8 @@ export function StatsCards({
           </CardTitle>
           <CardAction>
             <Badge variant="outline">
-              <TrendingUp className="size-3" />
-              Active
+              {totalClients > 0 ? <TrendingUp className="size-3" /> : <Minus className="size-3" />}
+              {totalClients > 0 ? "Active" : "—"}
             </Badge>
           </CardAction>
         </CardHeader>
@@ -108,7 +126,7 @@ export function StatsCards({
           <div className="line-clamp-1 flex gap-2 font-medium">
             {overdueInvoices > 0
               ? <><span className="text-destructive">{overdueInvoices} overdue invoices</span> <TrendingDown className="size-4" /></>
-              : <>All good <TrendingUp className="size-4" /></>
+              : <>All invoices on track <TrendingUp className="size-4" /></>
             }
           </div>
           <div className="text-muted-foreground">

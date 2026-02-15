@@ -21,6 +21,7 @@ export default async function DashboardPage() {
         totalClients={stats.totalClients}
         draftInvoices={stats.draftInvoices}
         overdueInvoices={stats.overdueInvoices}
+        trends={stats.trends}
       />
       <div className="px-4 lg:px-6">
         <LazyRevenueChart data={stats.revenueByMonth} />

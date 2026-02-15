@@ -18,6 +18,12 @@ export interface RecentProjectItem {
   updatedAt: string;
 }
 
+export interface TrendData {
+  revenueTrend: number | null;
+  hoursTrend: number | null;
+  hoursLastMonth: number;
+}
+
 export interface DashboardStats {
   totalRevenue: number;
   activeProjects: number;
@@ -25,6 +31,7 @@ export interface DashboardStats {
   totalClients: number;
   draftInvoices: number;
   overdueInvoices: number;
+  trends: TrendData;
   revenueByMonth: RevenueByMonth[];
   projectsByStatus: ProjectByStatus[];
   recentProjects: RecentProjectItem[];
@@ -38,6 +45,7 @@ const MONTHS = [
 export async function getDashboardStats(): Promise<DashboardStats> {
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
 
   const twelveMonthsAgo = new Date();
   twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 11);
@@ -53,6 +61,9 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     overdueInvoices,
     paidInvoices,
     projectStatusCounts,
+    revenueThisMonth,
+    revenueLastMonth,
+    hoursLastMonthResult,
     recentProjectsRaw,
   ] = await Promise.all([
     prisma.invoice.aggregate({
@@ -89,6 +100,30 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       by: ["status"],
       _count: { status: true },
     }),
+    // Revenue this month (paid invoices dated this month)
+    prisma.invoice.aggregate({
+      where: {
+        status: "PAID",
+        date: { gte: startOfMonth },
+      },
+      _sum: { total: true },
+    }),
+    // Revenue last month
+    prisma.invoice.aggregate({
+      where: {
+        status: "PAID",
+        date: { gte: startOfLastMonth, lt: startOfMonth },
+      },
+      _sum: { total: true },
+    }),
+    // Hours last month
+    prisma.timeEntry.aggregate({
+      where: {
+        startTime: { gte: startOfLastMonth, lt: startOfMonth },
+        duration: { not: null },
+      },
+      _sum: { duration: true },
+    }),
     prisma.project.findMany({
       take: 5,
       orderBy: { updatedAt: "desc" },
@@ -105,6 +140,20 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   const totalRevenue = Number(revenueResult._sum.total ?? 0);
   const hoursThisMonth =
     Math.round(((hoursResult._sum.duration ?? 0) / 60) * 10) / 10;
+
+  // Trend calculations
+  const revThisMonth = Number(revenueThisMonth._sum.total ?? 0);
+  const revLastMonth = Number(revenueLastMonth._sum.total ?? 0);
+  const hoursLastMonth =
+    Math.round(((hoursLastMonthResult._sum.duration ?? 0) / 60) * 10) / 10;
+
+  const revenueTrend = revLastMonth > 0
+    ? Math.round(((revThisMonth - revLastMonth) / revLastMonth) * 1000) / 10
+    : revThisMonth > 0 ? 100 : null;
+
+  const hoursTrend = hoursLastMonth > 0
+    ? Math.round(((hoursThisMonth - hoursLastMonth) / hoursLastMonth) * 1000) / 10
+    : hoursThisMonth > 0 ? 100 : null;
 
   // Build revenue by month for last 12 months
   const revenueMap = new Map<string, number>();
@@ -156,6 +205,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     totalClients,
     draftInvoices,
     overdueInvoices,
+    trends: { revenueTrend, hoursTrend, hoursLastMonth },
     revenueByMonth,
     projectsByStatus,
     recentProjects,
