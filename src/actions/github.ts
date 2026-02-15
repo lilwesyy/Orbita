@@ -2,8 +2,36 @@
 
 import { prisma } from "@/lib/prisma";
 import { decrypt } from "@/lib/encryption";
-import { fetchAllDashboardData, fetchUserRepos, rerunWorkflow, dispatchWorkflow, fetchWorkflowJobs, fetchJobLog, fetchRepoContents, fetchFileContent } from "@/lib/github";
-import type { GitHubDashboardData, GitHubRepo, GitHubWorkflowJob, GitHubRepoContent } from "@/types/github";
+import { fetchAllDashboardData, fetchUserRepos, rerunWorkflow, dispatchWorkflow, fetchWorkflowJobs, fetchJobLog, fetchRepoContents, fetchFileContent, fetchCommits, fetchCommitActivity } from "@/lib/github";
+import type { GitHubDashboardData, GitHubRepo, GitHubWorkflowJob, GitHubRepoContent, GitHubCommit, GitHubWeeklyCommitActivity } from "@/types/github";
+
+interface GitHubCommitsOverviewResult {
+  commits: GitHubCommit[];
+  commitActivity: GitHubWeeklyCommitActivity[];
+}
+
+export async function fetchGitHubCommitsForOverview(
+  projectId: string
+): Promise<GitHubCommitsOverviewResult | null> {
+  const config = await prisma.gitHubConfig.findUnique({
+    where: { projectId },
+  });
+
+  if (!config || !config.repoOwner || !config.repoName) {
+    return null;
+  }
+
+  try {
+    const token = decrypt(config.accessToken);
+    const [commits, commitActivity] = await Promise.all([
+      fetchCommits(token, config.repoOwner, config.repoName),
+      fetchCommitActivity(token, config.repoOwner, config.repoName),
+    ]);
+    return { commits, commitActivity };
+  } catch {
+    return null;
+  }
+}
 
 interface GitHubDashboardResult {
   data?: GitHubDashboardData;

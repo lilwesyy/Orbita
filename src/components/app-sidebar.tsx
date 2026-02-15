@@ -10,11 +10,11 @@ import {
   IconClock,
   IconDashboard,
   IconDatabase,
+  IconDots,
   IconFile,
   IconFileDescription,
   IconLock,
   IconFolder,
-  IconUserCircle,
   IconMail,
   IconHelp,
   IconInnerShadowTop,
@@ -81,7 +81,6 @@ function SearchKbd() {
 
 function getNavSecondary(): NavSecondaryItem[] {
   return [
-    { title: "Account", url: "/account", icon: IconUserCircle },
     { title: "Settings", url: "/settings", icon: IconSettings },
     { title: "Help", url: "#", icon: IconHelp },
     {
@@ -150,36 +149,63 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   projects: ProjectSummary[]
 }
 
+const COLLAPSE_THRESHOLD = 2
+
 function ProjectNavGroups({ groups }: { groups: ProjectNavGroup[] }) {
   const pathname = usePathname()
+  const [expanded, setExpanded] = React.useState<Record<string, boolean>>({})
+
   return (
     <>
-      {groups.map((group) => (
-        <SidebarGroup key={group.label}>
-          <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {group.items.map((item) => {
-                const isExactMatch = /^\/projects\/[^/]+$/.test(item.url)
-                const isActive = isExactMatch
-                  ? pathname === item.url
-                  : pathname.startsWith(item.url)
-                return (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton tooltip={item.title} isActive={isActive} asChild>
-                      <Link href={item.url}>
-                        {item.icon && <item.icon />}
-                        <span>{item.title}</span>
-                      </Link>
+      {groups.map((group) => {
+        const needsCollapse = group.items.length > COLLAPSE_THRESHOLD
+        const isExpanded = expanded[group.label] ?? false
+        // Auto-expand if the active page is in a collapsed item
+        const activeInHidden = needsCollapse && !isExpanded && group.items.slice(COLLAPSE_THRESHOLD).some((item) => {
+          const isExactMatch = /^\/projects\/[^/]+$/.test(item.url)
+          return isExactMatch ? pathname === item.url : pathname.startsWith(item.url)
+        })
+        const showAll = !needsCollapse || isExpanded || activeInHidden
+        const visibleItems = showAll ? group.items : group.items.slice(0, COLLAPSE_THRESHOLD)
+
+        return (
+          <SidebarGroup key={group.label}>
+            <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {visibleItems.map((item) => {
+                  const isExactMatch = /^\/projects\/[^/]+$/.test(item.url)
+                  const isActive = isExactMatch
+                    ? pathname === item.url
+                    : pathname.startsWith(item.url)
+                  return (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton tooltip={item.title} isActive={isActive} asChild>
+                        <Link href={item.url}>
+                          {item.icon && <item.icon />}
+                          <span>{item.title}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                      {item.action}
+                    </SidebarMenuItem>
+                  )
+                })}
+                {needsCollapse && !activeInHidden && (
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      className="text-sidebar-foreground/70"
+                      onClick={() => setExpanded((prev) => ({ ...prev, [group.label]: !isExpanded }))}
+                    >
+                      <IconDots className="text-sidebar-foreground/70" />
+                      <span>{isExpanded ? "Less" : "More"}</span>
                     </SidebarMenuButton>
-                    {item.action}
                   </SidebarMenuItem>
-                )
-              })}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-      ))}
+                )}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )
+      })}
     </>
   )
 }

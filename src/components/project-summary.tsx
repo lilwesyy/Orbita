@@ -18,7 +18,9 @@ import {
   Globe,
   ExternalLink,
   Loader2,
+  GitCommit,
 } from "lucide-react";
+import { IconBrandGithub } from "@tabler/icons-react";
 import { Card, CardHeader, CardTitle, CardDescription, CardAction, CardContent, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -40,6 +42,7 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "@/components/ui/empty";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ProjectLogoUpload } from "@/components/project-logo-upload";
 import { ProjectForm } from "@/components/project-form";
 import ConfirmModal from "@/components/confirm-modal";
@@ -112,6 +115,10 @@ interface RecentActivityEntry {
   taskTitle: string | null;
   durationMinutes: number | null;
   notes: string | null;
+  type?: "time" | "commit";
+  commitUrl?: string;
+  commitAuthor?: string;
+  commitAuthorAvatar?: string;
 }
 
 interface ProjectSummaryProps {
@@ -122,6 +129,7 @@ interface ProjectSummaryProps {
   budgetStats: BudgetStats;
   invoiceStats: InvoiceStats;
   recentActivity: RecentActivityEntry[];
+  githubHours?: number;
 }
 
 // --- Helpers ---
@@ -146,6 +154,7 @@ export function ProjectSummary({
   budgetStats,
   invoiceStats,
   recentActivity,
+  githubHours = 0,
 }: ProjectSummaryProps) {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -310,8 +319,8 @@ export function ProjectSummary({
       {/* STATS ROW — #6 Clickable cards */}
       <div className="*:data-[slot=card]:shadow-xs grid grid-cols-1 gap-4 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
         {/* Tasks */}
-        <Link href={`/projects/${project.id}/tasks`} className="group">
-          <Card className="@container/card transition-shadow group-hover:shadow-md">
+        <Link href={`/projects/${project.id}/tasks`} className="group h-full">
+          <Card className="@container/card h-full flex flex-col transition-shadow group-hover:shadow-md">
             <CardHeader>
               <CardDescription>Tasks</CardDescription>
               <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
@@ -324,7 +333,7 @@ export function ProjectSummary({
                 </Badge>
               </CardAction>
             </CardHeader>
-            <CardFooter className="flex-col items-start gap-1.5 text-sm">
+            <CardFooter className="mt-auto flex-col items-start gap-1.5 text-sm">
               <div className="line-clamp-1 flex gap-2 font-medium">
                 {taskBreakdown.total > 0
                   ? `${taskBreakdown.completionPercent}% complete`
@@ -341,8 +350,8 @@ export function ProjectSummary({
         </Link>
 
         {/* Hours */}
-        <Link href={`/projects/${project.id}/time`} className="group">
-          <Card className="@container/card transition-shadow group-hover:shadow-md">
+        <Link href={`/projects/${project.id}/time`} className="group h-full">
+          <Card className="@container/card h-full flex flex-col transition-shadow group-hover:shadow-md">
             <CardHeader>
               <CardDescription>Hours Logged</CardDescription>
               <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
@@ -355,7 +364,7 @@ export function ProjectSummary({
                 </Badge>
               </CardAction>
             </CardHeader>
-            <CardFooter className="flex-col items-start gap-1.5 text-sm">
+            <CardFooter className="mt-auto flex-col items-start gap-1.5 text-sm">
               <div className="line-clamp-1 flex gap-2 font-medium">
                 {timeStats.totalEarned > 0
                   ? `${formatCurrency(timeStats.totalEarned)} earned`
@@ -366,12 +375,18 @@ export function ProjectSummary({
                   ? formatDuration(timeStats.totalMinutes)
                   : "0 minutes total"}
               </div>
+              {githubHours > 0 && (
+                <div className="flex items-center gap-1 text-muted-foreground">
+                  <IconBrandGithub className="size-3.5" />
+                  ~{githubHours}h from GitHub
+                </div>
+              )}
             </CardFooter>
           </Card>
         </Link>
 
         {/* Budget */}
-        <Card className="@container/card">
+        <Card className="@container/card h-full flex flex-col">
           <CardHeader>
             <CardDescription>Budget</CardDescription>
             <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
@@ -386,7 +401,7 @@ export function ProjectSummary({
               </Badge>
             </CardAction>
           </CardHeader>
-          <CardFooter className="flex-col items-start gap-1.5 text-sm">
+          <CardFooter className="mt-auto flex-col items-start gap-1.5 text-sm">
             <div className="line-clamp-1 flex gap-2 font-medium">
               {budgetStats.budgetRaw > 0
                 ? `${formatCurrency(budgetStats.consumed)} of ${formatCurrency(budgetStats.budgetRaw)}`
@@ -403,7 +418,7 @@ export function ProjectSummary({
         </Card>
 
         {/* Invoiced */}
-        <Card className="@container/card">
+        <Card className="@container/card h-full flex flex-col">
           <CardHeader>
             <CardDescription>Invoiced</CardDescription>
             <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
@@ -416,7 +431,7 @@ export function ProjectSummary({
               </Badge>
             </CardAction>
           </CardHeader>
-          <CardFooter className="flex-col items-start gap-1.5 text-sm">
+          <CardFooter className="mt-auto flex-col items-start gap-1.5 text-sm">
             <div className="line-clamp-1 flex gap-2 font-medium">
               {invoiceStats.totalPaid > 0
                 ? `${formatCurrency(invoiceStats.totalPaid)} paid`
@@ -526,7 +541,7 @@ export function ProjectSummary({
         <Card>
           <CardHeader>
             <CardTitle>Recent Activity</CardTitle>
-            <CardDescription>Latest time entries</CardDescription>
+            <CardDescription>Latest activity</CardDescription>
             <CardAction>
               <Button variant="ghost" size="sm" asChild>
                 <Link href={`/projects/${project.id}/time`}>
@@ -541,37 +556,78 @@ export function ProjectSummary({
                 {recentActivity.map((entry, i) => (
                   <div key={entry.id}>
                     {i > 0 && <Separator className="my-3" />}
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        {entry.taskTitle ? (
-                          <Link
-                            href={`/projects/${project.id}/tasks`}
-                            className="text-sm font-medium truncate block hover:underline underline-offset-4"
-                          >
-                            {entry.taskTitle}
-                          </Link>
-                        ) : (
-                          <p className="text-sm font-medium truncate text-muted-foreground">
-                            No task
+                    {entry.type === "commit" ? (
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-start gap-2 min-w-0">
+                          <Avatar className="size-5 shrink-0 mt-0.5">
+                            {entry.commitAuthorAvatar && (
+                              <AvatarImage src={entry.commitAuthorAvatar} alt={entry.commitAuthor ?? ""} />
+                            )}
+                            <AvatarFallback className="text-[10px]">
+                              <GitCommit className="size-3" />
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="min-w-0">
+                            {entry.commitUrl ? (
+                              <a
+                                href={entry.commitUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm font-medium truncate block hover:underline underline-offset-4"
+                              >
+                                {entry.taskTitle}
+                              </a>
+                            ) : (
+                              <p className="text-sm font-medium truncate">
+                                {entry.taskTitle}
+                              </p>
+                            )}
+                            {entry.commitAuthor && (
+                              <p className="text-xs text-muted-foreground truncate">
+                                {entry.commitAuthor}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <p className="text-xs text-muted-foreground">
+                            {formatDate(entry.date)}
                           </p>
-                        )}
-                        {entry.notes && (
-                          <p className="text-xs text-muted-foreground truncate">
-                            {entry.notes}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          {entry.taskTitle ? (
+                            <Link
+                              href={`/projects/${project.id}/tasks`}
+                              className="text-sm font-medium truncate block hover:underline underline-offset-4"
+                            >
+                              {entry.taskTitle}
+                            </Link>
+                          ) : (
+                            <p className="text-sm font-medium truncate text-muted-foreground">
+                              No task
+                            </p>
+                          )}
+                          {entry.notes && (
+                            <p className="text-xs text-muted-foreground truncate">
+                              {entry.notes}
+                            </p>
+                          )}
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <p className="text-sm font-medium tabular-nums">
+                            {entry.durationMinutes
+                              ? formatDuration(entry.durationMinutes)
+                              : "—"}
                           </p>
-                        )}
+                          <p className="text-xs text-muted-foreground">
+                            {formatDate(entry.date)}
+                          </p>
+                        </div>
                       </div>
-                      <div className="shrink-0 text-right">
-                        <p className="text-sm font-medium tabular-nums">
-                          {entry.durationMinutes
-                            ? formatDuration(entry.durationMinutes)
-                            : "—"}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {formatDate(entry.date)}
-                        </p>
-                      </div>
-                    </div>
+                    )}
                   </div>
                 ))}
               </div>
