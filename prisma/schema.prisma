@@ -1,0 +1,312 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// NextAuth models
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  password      String?
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts Account[]
+  sessions Session[]
+}
+
+// Business models
+model Client {
+  id        String       @id @default(cuid())
+  name      String
+  email     String?
+  phone     String?
+  company   String?
+  address   String?
+  notes     String?      @db.Text
+  status    ClientStatus @default(ACTIVE)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  projects Project[]
+  invoices Invoice[]
+
+  @@index([status])
+}
+
+enum ClientStatus {
+  ACTIVE
+  INACTIVE
+  LEAD
+}
+
+model Project {
+  id          String        @id @default(cuid())
+  name        String
+  description String?       @db.Text
+  websiteUrl   String?
+  logoUrl      String?
+  brandProfile String?       @db.Text
+  seoAudit     String?       @db.Text
+  status       ProjectStatus @default(PROPOSAL)
+  startDate   DateTime?
+  endDate     DateTime?
+  budget      Decimal?      @db.Decimal(10, 2)
+  hourlyRate  Decimal?      @db.Decimal(10, 2)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  tasks       Task[]
+  timeEntries TimeEntry[]
+  invoices    Invoice[]
+  credentials  Credential[]
+  emailConfig  EmailConfig?
+  githubConfig GitHubConfig?
+  adDesigns    AdDesign[]
+
+  @@index([clientId])
+  @@index([status])
+}
+
+enum ProjectStatus {
+  PROPOSAL
+  IN_PROGRESS
+  REVIEW
+  COMPLETED
+  CANCELLED
+}
+
+model Task {
+  id          String       @id @default(cuid())
+  title       String
+  description String?      @db.Text
+  status      TaskStatus   @default(TODO)
+  priority    TaskPriority @default(MEDIUM)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  timeEntries TimeEntry[]
+  subtasks    Subtask[]
+
+  @@index([projectId])
+  @@index([status])
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+model Subtask {
+  id        String   @id @default(cuid())
+  title     String
+  completed Boolean  @default(false)
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  taskId String
+  task   Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+}
+
+model TimeEntry {
+  id         String    @id @default(cuid())
+  startTime  DateTime
+  endTime    DateTime?
+  duration   Int?
+  hourlyRate Decimal?  @db.Decimal(10, 2)
+  notes      String?   @db.Text
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  taskId String?
+  task   Task?   @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+  @@index([taskId])
+  @@index([startTime])
+}
+
+model Invoice {
+  id        String        @id @default(cuid())
+  number    String        @unique
+  type      InvoiceType   @default(INVOICE)
+  status    InvoiceStatus @default(DRAFT)
+  date      DateTime      @default(now())
+  dueDate   DateTime?
+  taxRate   Decimal       @default(22) @db.Decimal(5, 2)
+  subtotal  Decimal       @default(0) @db.Decimal(10, 2)
+  taxAmount Decimal       @default(0) @db.Decimal(10, 2)
+  total     Decimal       @default(0) @db.Decimal(10, 2)
+  notes     String?       @db.Text
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  items InvoiceItem[]
+
+  @@index([clientId])
+  @@index([projectId])
+  @@index([status])
+  @@index([date])
+}
+
+enum InvoiceType {
+  QUOTE
+  INVOICE
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+model EmailConfig {
+  id        String   @id @default(cuid())
+  projectId String   @unique
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  provider  String   @default("resend")
+  apiKey    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model InvoiceItem {
+  id          String  @id @default(cuid())
+  description String
+  quantity    Decimal @db.Decimal(10, 2)
+  unitPrice   Decimal @db.Decimal(10, 2)
+  total       Decimal @db.Decimal(10, 2)
+
+  invoiceId String
+  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+}
+
+model SiteSettings {
+  id                 String   @id @default("default")
+  anthropicApiKey    String?  @db.Text
+  githubClientId     String?  @db.Text
+  githubClientSecret String?  @db.Text
+  resendApiKey       String?  @db.Text
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model AdDesign {
+  id          String   @id @default(cuid())
+  format      String
+  prompt      String   @db.Text
+  sourceUrl   String?
+  htmlContent String   @db.Text
+  width       Int
+  height      Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([createdAt])
+}
+
+model GitHubConfig {
+  id           String   @id @default(cuid())
+  projectId    String   @unique
+  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  accessToken  String   @db.Text
+  repoOwner    String?
+  repoName     String?
+  repoFullName String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Credential {
+  id        String   @id @default(cuid())
+  label     String
+  category  String   @default("other")
+  username  String?
+  password  String?
+  url       String?
+  notes     String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
