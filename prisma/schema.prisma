@@ -254,14 +254,23 @@ model InvoiceItem {
   @@index([invoiceId])
 }
 
+enum EmailProvider {
+  RESEND
+  GMAIL
+  ICLOUD
+}
+
 model SiteSettings {
-  id                 String   @id @default("default")
-  anthropicApiKey    String?  @db.Text
-  githubClientId     String?  @db.Text
-  githubClientSecret String?  @db.Text
-  resendApiKey       String?  @db.Text
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  id                 String         @id @default("default")
+  anthropicApiKey    String?        @db.Text
+  githubClientId     String?        @db.Text
+  githubClientSecret String?        @db.Text
+  resendApiKey       String?        @db.Text
+  emailProvider      EmailProvider?
+  imapEmail          String?        @db.Text
+  imapPassword       String?        @db.Text
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
 }
 
 model AdDesign {

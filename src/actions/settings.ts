@@ -12,15 +12,24 @@ interface SettingsActionResult {
 export async function getSettings(): Promise<{
   hasApiKey: boolean;
   hasGithubCredentials: boolean;
-  hasResendApiKey: boolean;
+  hasEmailConfig: boolean;
+  emailProvider: string | null;
 }> {
   const settings = await prisma.siteSettings.findUnique({
     where: { id: "default" },
   });
+
+  const hasEmailConfig = settings?.emailProvider
+    ? settings.emailProvider === "RESEND"
+      ? !!settings.resendApiKey
+      : !!settings.imapEmail && !!settings.imapPassword
+    : false;
+
   return {
     hasApiKey: !!settings?.anthropicApiKey,
     hasGithubCredentials: !!settings?.githubClientId && !!settings?.githubClientSecret,
-    hasResendApiKey: !!settings?.resendApiKey,
+    hasEmailConfig,
+    emailProvider: settings?.emailProvider ?? null,
   };
 }
 

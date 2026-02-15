@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   ResizableHandle,
@@ -23,9 +23,20 @@ import {
   ArrowUp,
   ArrowDown,
   Loader2,
+  Pencil,
+  Reply,
+  ReplyAll,
 } from "lucide-react";
 import { formatDateTime, cn } from "@/lib/utils";
 import { fetchEmails, fetchEmailDetail } from "@/actions/email-config";
+import { EmailComposeDialog } from "@/components/email-compose-dialog";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+  EmptyDescription,
+} from "@/components/ui/empty";
 import type {
   ResendSentEmail,
   ResendReceivedEmail,
@@ -164,27 +175,56 @@ function StatusBadge({ event }: { event: string }) {
 type FetchEmailsFn = () => Promise<FetchEmailsResult>;
 type FetchEmailDetailFn = (emailId: string) => Promise<EmailDetail>;
 
+// Module-level cache: survives SPA navigations, cleared on page refresh
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+interface EmailCache {
+  sent: ResendSentEmail[];
+  received: ResendReceivedEmail[];
+  timestamp: number;
+}
+const emailCache = new Map<string, EmailCache>();
+
 interface EmailInboxProps {
   projectId?: string;
   onFetchEmails?: FetchEmailsFn;
   onFetchEmailDetail?: FetchEmailDetailFn;
+  showCompose?: boolean;
 }
 
-export function EmailInbox({ projectId, onFetchEmails, onFetchEmailDetail }: EmailInboxProps) {
-  const [sent, setSent] = useState<ResendSentEmail[]>([]);
-  const [received, setReceived] = useState<ResendReceivedEmail[]>([]);
+export function EmailInbox({ projectId, onFetchEmails, onFetchEmailDetail, showCompose }: EmailInboxProps) {
+  const cacheKey = projectId ?? "_owner";
+  const cached = emailCache.get(cacheKey);
+  const [sent, setSent] = useState<ResendSentEmail[]>(cached?.sent ?? []);
+  const [received, setReceived] = useState<ResendReceivedEmail[]>(cached?.received ?? []);
   const [isLoading, startTransition] = useTransition();
   const [filter, setFilter] = useState<FilterType>("all");
   const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [composeOpen, setComposeOpen] = useState(false);
+  const [replyTo, setReplyTo] = useState("");
+  const [replySubject, setReplySubject] = useState("");
 
-  const loadEmails = () => {
+  const loadEmails = (force = false) => {
+    if (!force) {
+      const entry = emailCache.get(cacheKey);
+      if (entry && Date.now() - entry.timestamp < CACHE_TTL) {
+        setSent(entry.sent);
+        setReceived(entry.received);
+        return;
+      }
+    }
+
     startTransition(async () => {
       const result = onFetchEmails
         ? await onFetchEmails()
         : await fetchEmails(projectId!);
       setSent(result.sent);
       setReceived(result.received);
+      emailCache.set(cacheKey, {
+        sent: result.sent,
+        received: result.received,
+        timestamp: Date.now(),
+      });
       if (result.error) toast.error(result.error);
     });
   };
@@ -222,36 +262,51 @@ export function EmailInbox({ projectId, onFetchEmails, onFetchEmailDetail }: Ema
       >
         {/* Mail List Panel */}
         <ResizablePanel defaultSize="35%" minSize="25%" maxSize="50%">
-          <Tabs
-            defaultValue="all"
-            className="flex h-full flex-col overflow-hidden"
-            onValueChange={(v) => {
-              setFilter(v as FilterType);
-              setSelectedSubject(null);
-            }}
-          >
+          <div className="flex h-full flex-col overflow-hidden">
             <div className="flex items-center px-4 py-2">
               <h2 className="text-xl font-bold">Inbox</h2>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="ml-auto h-8 w-8"
-                    onClick={loadEmails}
-                    disabled={isLoading}
-                  >
-                    <RefreshCw
-                      className={cn(
-                        "h-4 w-4",
-                        isLoading && "animate-spin"
-                      )}
-                    />
-                    <span className="sr-only">Refresh</span>
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Refresh emails</TooltipContent>
-              </Tooltip>
+              <div className="ml-auto flex items-center gap-1">
+                {showCompose && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => {
+                          setReplyTo("");
+                          setReplySubject("");
+                          setComposeOpen(true);
+                        }}
+                      >
+                        <Pencil className="h-4 w-4" />
+                        <span className="sr-only">Compose</span>
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Compose email</TooltipContent>
+                  </Tooltip>
+                )}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => loadEmails(true)}
+                      disabled={isLoading}
+                    >
+                      <RefreshCw
+                        className={cn(
+                          "h-4 w-4",
+                          isLoading && "animate-spin"
+                        )}
+                      />
+                      <span className="sr-only">Refresh</span>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Refresh emails</TooltipContent>
+                </Tooltip>
+              </div>
             </div>
             <Separator />
             <div className="bg-background/95 p-4 backdrop-blur-sm supports-[backdrop-filter]:bg-background/60">
@@ -262,60 +317,68 @@ export function EmailInbox({ projectId, onFetchEmails, onFetchEmailDetail }: Ema
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
-            <TabsList className="w-full rounded-none border-b bg-transparent p-0">
-              <TabsTrigger
-                value="all"
-                className="relative rounded-none border-b-2 border-b-transparent px-4 pb-3 pt-2 font-semibold text-muted-foreground data-[state=active]:border-b-primary data-[state=active]:text-foreground data-[state=active]:shadow-none"
-              >
-                <Inbox className="mr-2 h-4 w-4" />
-                All
-              </TabsTrigger>
-              <TabsTrigger
-                value="sent"
-                className="relative rounded-none border-b-2 border-b-transparent px-4 pb-3 pt-2 font-semibold text-muted-foreground data-[state=active]:border-b-primary data-[state=active]:text-foreground data-[state=active]:shadow-none"
-              >
-                <Send className="mr-2 h-4 w-4" />
-                Sent
-              </TabsTrigger>
-              <TabsTrigger
-                value="received"
-                className="relative rounded-none border-b-2 border-b-transparent px-4 pb-3 pt-2 font-semibold text-muted-foreground data-[state=active]:border-b-primary data-[state=active]:text-foreground data-[state=active]:shadow-none"
-              >
-                <Mail className="mr-2 h-4 w-4" />
-                Received
-              </TabsTrigger>
-            </TabsList>
-            <TabsContent value="all" className="m-0 flex-1 overflow-hidden">
+            <Tabs
+              defaultValue="all"
+              onValueChange={(v) => {
+                setFilter(v as FilterType);
+                setSelectedSubject(null);
+              }}
+            >
+              <TabsList className="mx-4 mb-2">
+                <TabsTrigger value="all">
+                  <Inbox className="h-4 w-4" />
+                  All
+                </TabsTrigger>
+                <TabsTrigger value="sent">
+                  <Send className="h-4 w-4" />
+                  Sent
+                </TabsTrigger>
+                <TabsTrigger value="received">
+                  <Mail className="h-4 w-4" />
+                  Received
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+            <div className="flex-1 overflow-hidden">
               <MailList
                 threads={filteredThreads}
                 selectedSubject={selectedSubject}
                 onSelect={setSelectedSubject}
               />
-            </TabsContent>
-            <TabsContent value="sent" className="m-0 flex-1 overflow-hidden">
-              <MailList
-                threads={filteredThreads}
-                selectedSubject={selectedSubject}
-                onSelect={setSelectedSubject}
-              />
-            </TabsContent>
-            <TabsContent value="received" className="m-0 flex-1 overflow-hidden">
-              <MailList
-                threads={filteredThreads}
-                selectedSubject={selectedSubject}
-                onSelect={setSelectedSubject}
-              />
-            </TabsContent>
-          </Tabs>
+            </div>
+          </div>
         </ResizablePanel>
 
         <Separator orientation="vertical" />
 
         {/* Mail Detail Panel */}
         <ResizablePanel defaultSize="65%" minSize="30%">
-          <MailDisplay thread={selectedThread} projectId={projectId} onFetchEmailDetail={onFetchEmailDetail} />
+          <MailDisplay
+            thread={selectedThread}
+            projectId={projectId}
+            onFetchEmailDetail={onFetchEmailDetail}
+            onReply={showCompose ? (data) => {
+              setReplyTo(data.to);
+              setReplySubject(data.subject);
+              setComposeOpen(true);
+            } : undefined}
+          />
         </ResizablePanel>
       </ResizablePanelGroup>
+      {showCompose && (
+        <EmailComposeDialog
+          open={composeOpen}
+          onOpenChange={(open) => {
+            setComposeOpen(open);
+            if (!open) {
+              setReplyTo("");
+              setReplySubject("");
+            }
+          }}
+          defaultTo={replyTo}
+          defaultSubject={replySubject}
+        />
+      )}
     </TooltipProvider>
   );
 }
@@ -331,10 +394,17 @@ interface MailListProps {
 function MailList({ threads, selectedSubject, onSelect }: MailListProps) {
   if (threads.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-        <Mail className="h-10 w-10 mb-3 opacity-40" />
-        <p className="text-sm">No emails found</p>
-      </div>
+      <Empty className="my-8 border-0">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <Mail />
+          </EmptyMedia>
+          <EmptyTitle>No emails found</EmptyTitle>
+          <EmptyDescription>
+            Your inbox is empty. Try refreshing or adjusting your search.
+          </EmptyDescription>
+        </EmptyHeader>
+      </Empty>
     );
   }
 
@@ -409,13 +479,19 @@ function MailList({ threads, selectedSubject, onSelect }: MailListProps) {
 
 /* ── Mail Display ──────────────────────────────────────── */
 
+interface ReplyData {
+  to: string;
+  subject: string;
+}
+
 interface MailDisplayProps {
   thread: EmailThread | null;
   projectId?: string;
   onFetchEmailDetail?: (emailId: string) => Promise<EmailDetail>;
+  onReply?: (data: ReplyData) => void;
 }
 
-function MailDisplay({ thread, projectId, onFetchEmailDetail }: MailDisplayProps) {
+function MailDisplay({ thread, projectId, onFetchEmailDetail, onReply }: MailDisplayProps) {
   const [bodies, setBodies] = useState<Record<string, EmailDetail>>({});
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
   const fetchedRef = useRef<Set<string>>(new Set());
@@ -448,12 +524,17 @@ function MailDisplay({ thread, projectId, onFetchEmailDetail }: MailDisplayProps
 
   if (!thread) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <div className="flex flex-col items-center gap-2 text-muted-foreground">
-          <Mail className="h-10 w-10 opacity-40" />
-          <p className="text-sm">Select a conversation to view</p>
-        </div>
-      </div>
+      <Empty className="h-full border-0">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <Mail />
+          </EmptyMedia>
+          <EmptyTitle>No conversation selected</EmptyTitle>
+          <EmptyDescription>
+            Select a conversation from the list to view its content.
+          </EmptyDescription>
+        </EmptyHeader>
+      </Empty>
     );
   }
 
@@ -514,8 +595,58 @@ function MailDisplay({ thread, projectId, onFetchEmailDetail }: MailDisplayProps
                     </time>
                   </div>
                 </div>
-                <div className="text-xs text-muted-foreground">
-                  To: {email.to.join(", ")}
+                <div className="flex items-center justify-between">
+                  <div className="text-xs text-muted-foreground">
+                    To: {email.to.join(", ")}
+                  </div>
+                  {onReply && (
+                    <div className="flex items-center gap-1">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => {
+                              const replyTo = email.direction === "received"
+                                ? email.from.replace(/.*<(.+)>/, "$1")
+                                : email.to[0];
+                              const subject = thread.subject.startsWith("Re:")
+                                ? thread.subject
+                                : `Re: ${thread.subject}`;
+                              onReply({ to: replyTo, subject });
+                            }}
+                          >
+                            <Reply className="h-3.5 w-3.5" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Reply</TooltipContent>
+                      </Tooltip>
+                      {email.to.length > 1 && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={() => {
+                                const allAddrs = new Set<string>();
+                                allAddrs.add(email.from.replace(/.*<(.+)>/, "$1"));
+                                email.to.forEach((a) => allAddrs.add(a));
+                                const subject = thread.subject.startsWith("Re:")
+                                  ? thread.subject
+                                  : `Re: ${thread.subject}`;
+                                onReply({ to: Array.from(allAddrs).join(", "), subject });
+                              }}
+                            >
+                              <ReplyAll className="h-3.5 w-3.5" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Reply All</TooltipContent>
+                        </Tooltip>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <Separator className="my-1" />
                 <EmailBody body={body} isLoading={isBodyLoading} />

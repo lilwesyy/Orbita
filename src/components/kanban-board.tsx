@@ -13,7 +13,7 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { toast } from "sonner";
-import { GripVertical, Pencil } from "lucide-react";
+import { GripVertical, Pencil, ListTodo, Loader, CheckCircle2 } from "lucide-react";
 import type { TaskStatus, TaskPriority } from "@/generated/prisma/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,13 @@ import {
   priorityConfig,
   type TaskWithSubtasks,
 } from "@/components/task-list";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+  EmptyDescription,
+} from "@/components/ui/empty";
 
 // --- Priority sort order ---
 
@@ -49,6 +56,12 @@ const columns: { status: TaskStatus; label: string }[] = [
   { status: "IN_PROGRESS", label: "In Progress" },
   { status: "DONE", label: "Done" },
 ];
+
+const emptyStateConfig: Record<TaskStatus, { icon: typeof ListTodo; title: string; description: string }> = {
+  TODO: { icon: ListTodo, title: "No tasks yet", description: "Create a new task or drag one here" },
+  IN_PROGRESS: { icon: Loader, title: "Nothing in progress", description: "Drag a task here to start working on it" },
+  DONE: { icon: CheckCircle2, title: "No completed tasks", description: "Drag finished tasks here" },
+};
 
 interface KanbanColumnProps {
   status: TaskStatus;
@@ -77,11 +90,32 @@ function KanbanColumn({ status, label, tasks, onEdit }: KanbanColumnProps) {
         </Badge>
       </div>
       <div className="flex flex-col gap-2 p-2 flex-1">
-        {tasks.map((task) => (
-          <KanbanCard key={task.id} task={task} onEdit={onEdit} />
-        ))}
+        {tasks.length === 0 ? (
+          <ColumnEmpty status={status} />
+        ) : (
+          tasks.map((task) => (
+            <KanbanCard key={task.id} task={task} onEdit={onEdit} />
+          ))
+        )}
       </div>
     </div>
+  );
+}
+
+function ColumnEmpty({ status }: { status: TaskStatus }) {
+  const cfg = emptyStateConfig[status];
+  const Icon = cfg.icon;
+
+  return (
+    <Empty className="border-0 bg-transparent py-8 min-h-0">
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <Icon className="size-5" />
+        </EmptyMedia>
+        <EmptyTitle className="text-sm">{cfg.title}</EmptyTitle>
+        <EmptyDescription className="text-xs">{cfg.description}</EmptyDescription>
+      </EmptyHeader>
+    </Empty>
   );
 }
 

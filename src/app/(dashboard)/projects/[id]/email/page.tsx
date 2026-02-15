@@ -37,12 +37,6 @@ export default async function ProjectEmailPage({ params }: ProjectEmailPageProps
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden px-4 py-4 lg:px-6">
-      <div className="shrink-0">
-        <h1 className="text-2xl font-semibold text-foreground">Email</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Email inbox for {project.name}
-        </p>
-      </div>
       <EmailInbox projectId={id} />
     </div>
   );

@@ -10,6 +10,10 @@ interface ClientActionResult {
   success?: boolean;
 }
 
+export async function getClients() {
+  return prisma.client.findMany({ orderBy: { name: "asc" } });
+}
+
 export async function createClient(
   _prevState: ClientActionResult,
   formData: FormData

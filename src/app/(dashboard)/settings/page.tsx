@@ -6,7 +6,18 @@ import { Separator } from "@/components/ui/separator";
 import { IconKey, IconMail, IconBrandGithub } from "@tabler/icons-react";
 
 export default async function SettingsPage() {
-  const { hasApiKey, hasGithubCredentials, hasResendApiKey } = await getSettings();
+  const { hasApiKey, hasGithubCredentials, hasEmailConfig, emailProvider } =
+    await getSettings();
+
+  const emailLabel = hasEmailConfig
+    ? emailProvider === "RESEND"
+      ? "Resend Email"
+      : emailProvider === "GMAIL"
+        ? "Gmail"
+        : emailProvider === "ICLOUD"
+          ? "iCloud Mail"
+          : "Email"
+    : "Email";
 
   return (
     <div className="flex flex-col gap-4 px-4 py-4 lg:px-6 md:gap-6 md:py-6">
@@ -26,8 +37,8 @@ export default async function SettingsPage() {
         />
         <StatusIndicator
           icon={<IconMail className="w-4 h-4" />}
-          label="Resend Email"
-          configured={hasResendApiKey}
+          label={emailLabel}
+          configured={hasEmailConfig}
         />
         <StatusIndicator
           icon={<IconBrandGithub className="w-4 h-4" />}
@@ -43,7 +54,10 @@ export default async function SettingsPage() {
           <Separator className="mt-2 mb-4" />
           <div className="space-y-6">
             <SettingsForm hasApiKey={hasApiKey} />
-            <OwnerEmailSettingsForm hasResendApiKey={hasResendApiKey} />
+            <OwnerEmailSettingsForm
+              currentProvider={emailProvider}
+              hasConfig={hasEmailConfig}
+            />
           </div>
         </section>
 

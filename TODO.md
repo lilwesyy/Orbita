@@ -2,17 +2,12 @@
 
 ## Priorità Alta
 
-- [ ] **Breadcrumb navigation** — Aggiungere breadcrumb nel header (es. Projects > Website Redesign > Tasks)
 - [ ] **Mobile tables** — Card view su schermi piccoli invece di scroll orizzontale
 - [ ] **Kanban mobile** — Stack colonne verticalmente su mobile, swipe orizzontale
 - [ ] **Form validation inline** — Errori sotto i campi, validazione real-time (URL, email, date)
-- [ ] **Loading skeletons** — Aggiungere skeleton loader a project detail, tasks, branding, invoice detail
 
 ## Priorità Media
 
-- [ ] **Stats dashboard** — Calcolare trend reali (vs mese precedente) invece dei +12.5% hardcoded
-- [ ] **Rimuovere SectionCards** — Componente demo inutilizzato con dati falsi
-- [ ] **Empty states Kanban** — Messaggio nelle colonne vuote con CTA
 - [ ] **Time entry edit** — Permettere modifica entry, non solo cancellazione
 - [ ] **Invoice conferma PAID** — Chiedere conferma prima di segnare fattura come pagata
 - [ ] **Bulk actions** — Selezione multipla su tabelle (delete, export, cambio stato)

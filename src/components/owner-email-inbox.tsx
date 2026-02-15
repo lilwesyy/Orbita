@@ -8,6 +8,7 @@ export function OwnerEmailInbox() {
     <EmailInbox
       onFetchEmails={fetchOwnerEmails}
       onFetchEmailDetail={fetchOwnerEmailDetail}
+      showCompose
     />
   );
 }
