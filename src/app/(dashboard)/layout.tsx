@@ -63,7 +63,7 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
       <AppSidebar variant="inset" user={user} projects={projects} />
       <SearchDialog />
       <SidebarInset className="overflow-hidden">
-        <SiteHeader />
+        <SiteHeader projects={projects} />
         <div className="@container/main flex min-h-0 flex-1 flex-col gap-2 overflow-auto">
           {children}
         </div>

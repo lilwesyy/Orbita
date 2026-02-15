@@ -1,13 +1,26 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import {
-  IconUsers,
-  IconFolder,
-  IconListCheck,
+  IconBrush,
+  IconChartBar,
+  IconClock,
+  IconDashboard,
+  IconDatabase,
+  IconFile,
   IconFileDescription,
+  IconFolder,
+  IconLock,
+  IconListCheck,
   IconLoader2,
+  IconMail,
+  IconBrandGithub,
+  IconSeo,
+  IconSettings,
+  IconSparkles,
+  IconUserCircle,
+  IconUsers,
 } from "@tabler/icons-react";
 import {
   CommandDialog,
@@ -26,13 +39,76 @@ const emptyResults: SearchResults = {
   invoices: [],
 };
 
+interface QuickAction {
+  label: string;
+  keywords: string[];
+  url: string;
+  icon: typeof IconDashboard;
+  description: string;
+}
+
+const globalActions: QuickAction[] = [
+  { label: "Dashboard", keywords: ["dashboard", "home", "overview", "panoramica"], url: "/", icon: IconDashboard, description: "Go to dashboard" },
+  { label: "Clients", keywords: ["client", "clienti", "customer", "contatti"], url: "/clients", icon: IconUsers, description: "Manage clients" },
+  { label: "Projects", keywords: ["project", "progetti", "progetto"], url: "/projects", icon: IconFolder, description: "Manage projects" },
+  { label: "Time Tracking", keywords: ["time", "timer", "ore", "tempo", "tracking"], url: "/time-tracking", icon: IconClock, description: "Track time" },
+  { label: "Invoices", keywords: ["invoice", "fattura", "fatture", "billing"], url: "/invoices", icon: IconFileDescription, description: "Manage invoices" },
+  { label: "Analytics", keywords: ["analytics", "analisi", "statistiche", "grafici", "chart"], url: "/analytics", icon: IconChartBar, description: "View analytics" },
+  { label: "Email", keywords: ["email", "mail", "inbox", "posta"], url: "/email", icon: IconMail, description: "Email inbox" },
+  { label: "Account", keywords: ["account", "profilo", "profile", "avatar"], url: "/account", icon: IconUserCircle, description: "Account settings" },
+  { label: "Settings", keywords: ["settings", "impostazioni", "api key", "config"], url: "/settings", icon: IconSettings, description: "Global settings" },
+  { label: "New Client", keywords: ["new client", "nuovo cliente", "aggiungi cliente", "crea cliente"], url: "/clients/new", icon: IconUsers, description: "Create a new client" },
+  { label: "New Project", keywords: ["new project", "nuovo progetto", "aggiungi progetto", "crea progetto"], url: "/projects/new", icon: IconFolder, description: "Create a new project" },
+  { label: "New Invoice", keywords: ["new invoice", "nuova fattura", "aggiungi fattura", "crea fattura"], url: "/invoices/new", icon: IconFileDescription, description: "Create a new invoice" },
+];
+
+// Actions that require a project context — {id} is replaced at runtime
+const projectActions: QuickAction[] = [
+  { label: "Overview", keywords: ["overview", "panoramica", "dettagli"], url: "/projects/{id}", icon: IconDashboard, description: "Project overview" },
+  { label: "Tasks", keywords: ["task", "tasks", "attività", "todo"], url: "/projects/{id}/tasks", icon: IconListCheck, description: "Project tasks" },
+  { label: "Time", keywords: ["time", "ore", "tempo"], url: "/projects/{id}/time", icon: IconClock, description: "Project time entries" },
+  { label: "SEO Checker", keywords: ["seo", "audit", "check", "sito", "website"], url: "/projects/{id}/seo", icon: IconSeo, description: "SEO audit" },
+  { label: "Branding", keywords: ["brand", "branding", "logo", "favicon"], url: "/projects/{id}/branding", icon: IconBrush, description: "Branding & logos" },
+  { label: "Ad Maker", keywords: ["ad", "ads", "advertising", "pubblicità", "creatività", "banner"], url: "/projects/{id}/ad-maker", icon: IconSparkles, description: "AI Ad Maker" },
+  { label: "GitHub", keywords: ["github", "git", "repo", "repository", "commit"], url: "/projects/{id}/github", icon: IconBrandGithub, description: "GitHub integration" },
+  { label: "Credentials", keywords: ["credential", "credenziali", "password", "vault", "chiave"], url: "/projects/{id}/credentials", icon: IconLock, description: "Credential vault" },
+  { label: "Email", keywords: ["email", "mail", "posta"], url: "/projects/{id}/email", icon: IconMail, description: "Project email" },
+  { label: "Database", keywords: ["database", "db", "dati"], url: "/projects/{id}/database", icon: IconDatabase, description: "Project database" },
+  { label: "Files", keywords: ["file", "files", "documenti"], url: "/projects/{id}/files", icon: IconFile, description: "Project files" },
+];
+
+function matchesQuery(action: QuickAction, q: string): boolean {
+  const lower = q.toLowerCase();
+  return (
+    action.label.toLowerCase().includes(lower) ||
+    action.keywords.some((k) => k.includes(lower))
+  );
+}
+
 export function SearchDialog() {
   const router = useRouter();
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResults>(emptyResults);
   const [loading, setLoading] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Detect project context from URL
+  const activeProjectId = useMemo(() => {
+    const match = pathname.match(/^\/projects\/([^/]+)/);
+    const id = match?.[1];
+    return id && id !== "new" ? id : null;
+  }, [pathname]);
+
+  // Build resolved project actions for current context
+  const resolvedProjectActions = useMemo(() => {
+    if (!activeProjectId) return [];
+    return projectActions.map((a) => ({
+      ...a,
+      url: a.url.replace("{id}", activeProjectId),
+    }));
+  }, [activeProjectId]);
 
   // Cmd+K / Ctrl+K shortcut
   useEffect(() => {
@@ -83,7 +159,17 @@ export function SearchDialog() {
     [router]
   );
 
+  const matchedGlobal = query.trim().length >= 2
+    ? globalActions.filter((a) => matchesQuery(a, query))
+    : [];
+
+  const matchedProject = query.trim().length >= 2
+    ? resolvedProjectActions.filter((a) => matchesQuery(a, query))
+    : [];
+
   const hasResults =
+    matchedGlobal.length > 0 ||
+    matchedProject.length > 0 ||
     results.clients.length > 0 ||
     results.projects.length > 0 ||
     results.tasks.length > 0 ||
@@ -118,6 +204,42 @@ export function SearchDialog() {
 
         {!loading && query.trim().length >= 2 && !hasResults && (
           <CommandEmpty>No results found.</CommandEmpty>
+        )}
+
+        {!loading && matchedProject.length > 0 && (
+          <CommandGroup heading="Project">
+            {matchedProject.map((a) => (
+              <CommandItem
+                key={a.url}
+                value={`project-action-${a.label}`}
+                onSelect={() => navigate(a.url)}
+              >
+                <a.icon className="mr-2 size-4" />
+                <span>{a.label}</span>
+                <span className="ml-auto text-xs text-muted-foreground">
+                  {a.description}
+                </span>
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        )}
+
+        {!loading && matchedGlobal.length > 0 && (
+          <CommandGroup heading="Quick Actions">
+            {matchedGlobal.map((a) => (
+              <CommandItem
+                key={a.url + a.label}
+                value={`action-${a.label}`}
+                onSelect={() => navigate(a.url)}
+              >
+                <a.icon className="mr-2 size-4" />
+                <span>{a.label}</span>
+                <span className="ml-auto text-xs text-muted-foreground">
+                  {a.description}
+                </span>
+              </CommandItem>
+            ))}
+          </CommandGroup>
         )}
 
         {!loading && results.clients.length > 0 && (

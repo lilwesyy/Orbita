@@ -1,18 +1,35 @@
 "use client"
 
+import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb"
 
-const pathLabels: Record<string, string> = {
-  "": "Overview",
+interface BreadcrumbEntry {
+  label: string
+  href?: string
+}
+
+const topLevelLabels: Record<string, string> = {
   clients: "Clients",
   projects: "Projects",
   "time-tracking": "Time Tracking",
   invoices: "Invoices",
+  analytics: "Analytics",
+  email: "Email",
+  account: "Account",
+  settings: "Settings",
 }
 
-const projectSubPageLabels: Record<string, string> = {
+const projectSubLabels: Record<string, string> = {
   tasks: "Tasks",
   time: "Time",
   database: "Database",
@@ -22,27 +39,66 @@ const projectSubPageLabels: Record<string, string> = {
   edit: "Edit",
   "ad-maker": "Ad Maker",
   credentials: "Credentials",
+  github: "GitHub",
+  seo: "SEO",
 }
 
-export function SiteHeader() {
+interface SiteHeaderProps {
+  projects?: { id: string; name: string }[]
+}
+
+export function SiteHeader({ projects = [] }: SiteHeaderProps) {
   const pathname = usePathname()
   const segments = pathname.split("/").filter(Boolean)
 
-  let title: string
+  const crumbs: BreadcrumbEntry[] = []
 
-  // Check if we're in a project context: /projects/[id]/[subpage]
-  if (segments[0] === "projects" && segments[1] && segments[1] !== "new") {
-    const subPage = segments[2]
-    if (subPage && projectSubPageLabels[subPage]) {
-      title = projectSubPageLabels[subPage]
-    } else {
-      title = "Overview"
+  if (segments.length === 0) {
+    crumbs.push({ label: "Dashboard" })
+  } else if (segments[0] === "projects") {
+    crumbs.push({ label: "Projects", href: "/projects" })
+
+    if (segments[1]) {
+      if (segments[1] === "new") {
+        crumbs.push({ label: "New" })
+      } else {
+        const projectId = segments[1]
+        const project = projects.find((p) => p.id === projectId)
+        const projectName = project?.name ?? projectId.slice(0, 8)
+
+        if (segments[2]) {
+          crumbs.push({ label: projectName, href: `/projects/${projectId}` })
+          const subLabel = projectSubLabels[segments[2]] ?? segments[2]
+          crumbs.push({ label: subLabel })
+        } else {
+          crumbs.push({ label: projectName })
+        }
+      }
+    }
+  } else if (segments[0] === "clients") {
+    crumbs.push({ label: "Clients", href: segments[1] ? "/clients" : undefined })
+
+    if (segments[1] === "new") {
+      crumbs.push({ label: "New" })
+    } else if (segments[1] && segments[2] === "edit") {
+      crumbs.push({ label: "Edit" })
+    }
+  } else if (segments[0] === "invoices") {
+    crumbs.push({ label: "Invoices", href: segments[1] ? "/invoices" : undefined })
+
+    if (segments[1] === "new") {
+      crumbs.push({ label: "New" })
+    } else if (segments[1]) {
+      if (segments[2] === "edit") {
+        crumbs.push({ label: `#${segments[1].slice(0, 8)}`, href: `/invoices/${segments[1]}` })
+        crumbs.push({ label: "Edit" })
+      } else {
+        crumbs.push({ label: `#${segments[1].slice(0, 8)}` })
+      }
     }
   } else {
-    const firstSegment = segments[0] || ""
-    title =
-      pathLabels[firstSegment] ||
-      firstSegment.charAt(0).toUpperCase() + firstSegment.slice(1)
+    const label = topLevelLabels[segments[0]] ?? segments[0].charAt(0).toUpperCase() + segments[0].slice(1)
+    crumbs.push({ label })
   }
 
   return (
@@ -53,7 +109,27 @@ export function SiteHeader() {
           orientation="vertical"
           className="mx-2 data-[orientation=vertical]:h-4"
         />
-        <h1 className="text-base font-medium">{title}</h1>
+        <Breadcrumb>
+          <BreadcrumbList>
+            {crumbs.map((crumb, i) => {
+              const isLast = i === crumbs.length - 1
+              return (
+                <span key={crumb.label + i} className="inline-flex items-center gap-1.5 sm:gap-2.5">
+                  {i > 0 && <BreadcrumbSeparator />}
+                  <BreadcrumbItem>
+                    {isLast ? (
+                      <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
+                    ) : (
+                      <BreadcrumbLink asChild>
+                        <Link href={crumb.href!}>{crumb.label}</Link>
+                      </BreadcrumbLink>
+                    )}
+                  </BreadcrumbItem>
+                </span>
+              )
+            })}
+          </BreadcrumbList>
+        </Breadcrumb>
       </div>
     </header>
   )

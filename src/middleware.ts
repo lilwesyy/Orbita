@@ -4,7 +4,7 @@ import type { NextRequest } from "next/server";
 
 const { auth } = NextAuth(authConfig);
 
-export default auth(function middleware(req: NextRequest) {
+export default auth(function middleware(_req: NextRequest) {
   // The authorized callback handles the redirect logic
   return undefined;
 });

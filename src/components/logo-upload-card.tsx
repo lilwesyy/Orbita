@@ -158,7 +158,7 @@ export function LogoUploadCard({
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={`${logo.url}?t=${Date.now()}`}
+              src={logo.url}
               alt={label}
               className="max-h-[120px] max-w-full object-contain"
             />
@@ -207,14 +207,14 @@ export function LogoUploadCard({
             </p>
             <div className="flex flex-wrap gap-2">
               {[
-                { url: favicons.favicon16, size: "16×16" },
-                { url: favicons.favicon32, size: "32×32" },
-                { url: favicons.favicon180, size: "180×180" },
-              ].map(({ url, size }) => (
+                { url: favicons.favicon16, size: "16×16", name: "favicon-16.png" },
+                { url: favicons.favicon32, size: "32×32", name: "favicon-32.png" },
+                { url: favicons.favicon180, size: "180×180", name: "apple-touch-icon.png" },
+              ].map(({ url, size, name }) => (
                 <a
                   key={size}
                   href={url}
-                  download
+                  download={name}
                   className="flex items-center gap-1 text-xs text-primary hover:underline"
                 >
                   <IconDownload className="size-3" />
